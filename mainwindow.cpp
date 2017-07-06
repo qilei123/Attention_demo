@@ -38,6 +38,9 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->check_skeleton,SIGNAL(clicked()),this,SLOT(slot_skeleton_check()));
     connect(ui->check_landmark,SIGNAL(clicked()),this,SLOT(slot_landmark_check()));
 
+    connect(this,SIGNAL(sig_paintSkeleton()),this,SLOT(slot_paintSkeleton()));
+    connect(this,SIGNAL(sig_paintLandmark()),this,SLOT(slot_paintLandmark()));
+
     //seetaRecognizer = new cv::sfface::sffaceRecognizer((SMODEL_DIR + "seeta_fd_frontal_v1.0.bin").c_str());
     seetaRecognizer = new cv::sfface::sffaceRecognizer("seeta_fd_frontal_v1.0.bin");
     seetaRecognizer->SetMinFaceSize(40);
@@ -184,6 +187,8 @@ void MainWindow::slot_open_video_file()
 
     slot_open_video();
 
+    processStop = 0;
+
 }
 void MainWindow::slot_read_frame()
 {
@@ -204,7 +209,8 @@ void MainWindow::slot_read_frame()
         if(this->poseImgQueue.size()<queueMaxSize){
             original_frame = main_frame.clone();
             poseImgQueue.push(original_frame);
-        }else if(poseImgQueue.size() == queueMaxSize)
+        }
+        else if(poseImgQueue.size() >= queueMaxSize)
         {
             poseImgQueue.pop();
         }
@@ -321,6 +327,12 @@ void MainWindow::slot_close_video()
         this->poseEstState = POSESTOPED;
 
     this->main_timer->stop();
+
+    while(true)
+    {
+        if(processStop>=1)break;
+    }
+
     analytics_label->clear();
     writer.release();
     cap.release();
@@ -891,7 +903,7 @@ int MainWindow::landmarkDetect1(cv::Mat &captured_image, vector<cv::Rect_<double
                 //LandmarkDetector::DrawLine(disp_image, pose_estimate, cv::Scalar((1-detection_certainty)*255.0,0, detection_certainty*255), thickness, fx, fy, cx, cy);
                 //LandmarkDetector::DrawLine(faces_mat, pose_estimate, cv::Scalar((1-detection_certainty)*255.0,0, detection_certainty*255), thickness, fx, fy, cx, cy);
             }
-            std::cout<<"model:"<<model<<std::endl;
+            //std::cout<<"model:"<<model<<std::endl;
             features[model] = new svm_node[272+1];
             features[model][0].index =0;
             landmarks2features(&clnf_models[model], features[model]);
@@ -982,9 +994,10 @@ int MainWindow::landmarkDetect1(cv::Mat &captured_image, vector<cv::Rect_<double
     ms.width = temp_main_frame.size().width;
     QSize qs = ui->label_landmark->size();
     qdisplay_size = imageDisplaySize(ms,qs);
-    QImage scaledImage = image.scaled(qdisplay_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    ui->label_landmark->setPixmap(QPixmap::fromImage(scaledImage));
+    scaledImage_landmark = image.scaled(qdisplay_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    //ui->label_landmark->setPixmap(QPixmap::fromImage(scaledImage_landmark));
     //ui->label_landmark->repaint();
+    emit sig_paintLandmark();
 
 }
 
@@ -1056,32 +1069,37 @@ void MainWindow::runPoseEst()
                     joints_pos[j][1] = std::stoi(int_temp);
                     //std::cout<<joints_pos[j][0]<<"::::"<<joints_pos[j][1]<<std::endl;
                 }
-                    if(skeleton_showable){
-                        this->drawJoints(skeleton_mat,joints_pos);
-                        this->drawBones(skeleton_mat,joints_pos);
-                    }
-                    skeleton_show_one = true;
-                    if(mouse_nose_distance(joints_pos)<mn_distance_thredshold)
-                    {
-                    headAttention = this->getAngleAttention(head_base,joints_pos,0,1);
-                    shoulderAttention = this->getAngleAttention(shoulder_base,joints_pos,5,2);
-                    }
+                if(skeleton_showable){
+                    this->drawJoints(skeleton_mat,joints_pos);
+                    this->drawBones(skeleton_mat,joints_pos);
+                }
+                skeleton_show_one = true;
+                if(mouse_nose_distance(joints_pos)<mn_distance_thredshold)
+                {
+                headAttention = this->getAngleAttention(head_base,joints_pos,0,1);
+                shoulderAttention = this->getAngleAttention(shoulder_base,joints_pos,5,2);
+                }
                 i++;
                 output = fastWriter.write(root["bodies"][i]);
             }
-            if(poseImgQueue.size()>1)
-                poseImgQueue.pop();
+            std::cout<<"pose number:"<<i<<"  count:"<<count++<<std::endl;
+            //if(poseImgQueue.size()>1)
+            //    poseImgQueue.pop();
         }
         cv::Mat temp_main_frame;
         cv::cvtColor(skeleton_mat, temp_main_frame,CV_BGR2RGB);
+        //cv::imshow("te",skeleton_mat);
+        //cv::waitKey(1);
         QImage image = QImage((uchar*) temp_main_frame.data, temp_main_frame.cols, temp_main_frame.rows, temp_main_frame.step, QImage::Format_RGB888);
         cv::Size ms;
         ms.height= temp_main_frame.size().height;
         ms.width = temp_main_frame.size().width;
         QSize qs = ui->skeleton_label->size();
         qdisplay_size = imageDisplaySize(ms,qs);
-        QImage scaledImage = image.scaled(qdisplay_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        ui->skeleton_label->setPixmap(QPixmap::fromImage(scaledImage));
+        scaledImage_skeleton = image.scaled(qdisplay_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        //ui->skeleton_label->setPixmap(QPixmap::fromImage(scaledImage_skeleton));
+        //ui->skeleton_label->repaint();
+        emit sig_paintSkeleton();
     }
 
     cv::Mat skeleton_mat(h,w,CV_8UC3,cv::Scalar(255,255,255));
@@ -1093,9 +1111,11 @@ void MainWindow::runPoseEst()
     ms.width = temp_main_frame.size().width;
     QSize qs = ui->skeleton_label->size();
     qdisplay_size = imageDisplaySize(ms,qs);
-    QImage scaledImage = image.scaled(qdisplay_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    ui->skeleton_label->setPixmap(QPixmap::fromImage(scaledImage));
-    int t  = poseImgQueue.size();
+    scaledImage_skeleton = image.scaled(qdisplay_size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    //ui->skeleton_label->setPixmap(QPixmap::fromImage(scaledImage_skeleton));
+    //ui->skeleton_label->repaint();
+    emit sig_paintSkeleton();
+    //int t  = poseImgQueue.size();
     //for(int i=0;i<t;i++)
     //{
         //poseImgQueue.pop();
@@ -1104,6 +1124,7 @@ void MainWindow::runPoseEst()
     //realPose->freeGPU();
     //delete rt;
     //this->runPoseState = false;
+    processStop++;
 }
 float MainWindow::mouse_nose_distance(int positions[][2])
 {
@@ -1284,6 +1305,7 @@ void MainWindow::landmarkDetect()
 {
     //this->landmarkDetect(landmark_frame,face_detections);
     this->landmarkDetect1(landmark_frame,face_detections);
+
 }
 bool MainWindow::set_landmark_running(bool st)
 {
@@ -1428,6 +1450,19 @@ string MainWindow::result2labels(int class_nr_int)
         std::cout << "i have no idea" << std::endl;
     }
     return resultstr;
+}
+
+
+void MainWindow::slot_paintSkeleton()
+{
+    ui->skeleton_label->setPixmap(QPixmap::fromImage(scaledImage_skeleton));
+    ui->skeleton_label->repaint();
+}
+
+void MainWindow::slot_paintLandmark()
+{
+    ui->label_landmark->setPixmap(QPixmap::fromImage(scaledImage_landmark));
+    ui->label_landmark->repaint();
 }
 
 //double MainWindow::two_points_distance(double marks[][2],int index1,int index2)
