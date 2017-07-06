@@ -152,7 +152,7 @@ private:
     bool runPoseState = false;
     int poseEstState = POSEBORN;
     std::queue<cv::Mat> poseImgQueue;
-    int queueMaxSize = 5;
+    int queueMaxSize = 10;
 
     int src = NO_SRC;
 
