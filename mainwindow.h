@@ -169,7 +169,7 @@ private:
     vector<LandmarkDetector::FaceModelParameters> det_parameters;
     vector<LandmarkDetector::CLNF> clnf_models;
     vector<bool> active_models;
-    int num_faces_max = 20;
+    int num_faces_max = 5;
     LandmarkDetector::CLNF *clnf_model;
     bool cx_undefined = false;
 
@@ -204,6 +204,8 @@ private:
     bool landmark_showable = true;
 
     int thread_strategy = 0;
+
+    int processStop =0;
 private slots:
     void slot_open_video();      // open video
     void slot_open_video_file(); //open video file
@@ -217,6 +219,13 @@ private slots:
 
 public slots:
     void slot_press_position(int,int);
+
+signals:
+    void sig_paintSkeleton();
+    void sig_paintLandmark();
+private slots:
+    void slot_paintSkeleton();
+    void slot_paintLandmark();
 private:
     QSize imageDisplaySize(cv::Size &src_size,QSize &label_img_size);
     std::vector<seeta::FaceInfo> faceDetection(cv::Mat src);
@@ -272,10 +281,10 @@ private:
     int frameRate = 25;
     int codec = 0;
     cv::VideoWriter writer;
-
-
     int camera_id = 0;
-
+private:
+    QImage scaledImage_skeleton;
+    QImage scaledImage_landmark;
 public:
      bool landmark_running = false;
      void landmarkDetect();
